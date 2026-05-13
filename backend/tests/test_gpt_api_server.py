@@ -1,10 +1,4 @@
-import os
-import json
-import tempfile
 from unittest.mock import Mock
-
-import pytest
-
 import gpt_api_server
 
 
@@ -37,7 +31,6 @@ def test_transcribe_with_openai_returns_text(monkeypatch, tmp_path):
 
     monkeypatch.setattr(gpt_api_server, "client", mock_client)
     # Avoid duration check by faking a reasonable audio duration
-    monkeypatch.setattr(gpt_api_server, "_get_audio_duration", lambda p: 1.0)
 
     text = gpt_api_server.transcribe_with_openai(str(audio_file))
     assert text == "hello world"
