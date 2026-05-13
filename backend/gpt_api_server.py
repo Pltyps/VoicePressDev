@@ -26,15 +26,11 @@ from dotenv import load_dotenv
 from fastapi.middleware.cors import CORSMiddleware
 from enum import Enum
 
-# Use the newer OpenAI client class. Old code used the legacy sdk patterns
-try:
-    # Newer openai python package exposes an OpenAI client class
-    from openai import OpenAI
-except Exception:
-    # Fallback to the legacy import name for error clarity
-    raise
-
-client: Optional["OpenAI"] = None
+api_key = os.getenv("OPENAI_API_KEY")
+if not api_key:
+    logger.error("❌ OPENAI_API_KEY is missing! The server will not function.")
+    # Optional: sys.exit(1) if you want the build to fail immediately on Render
+client = OpenAI(api_key=api_key)
 
 # ---------- Logging ----------
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -61,9 +57,7 @@ def log_tmp_disk(tag: str = "boot"):
 
 # ---------- Env / OpenAI ----------
 try:
-    base_path = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
-    dotenv_path = base_path / ".env"
-    load_dotenv(dotenv_path=dotenv_path)
+    load_dotenv()
 
     api_key = os.getenv("OPENAI_API_KEY")
     # Initialize the OpenAI client only if an API key is provided. During
@@ -100,12 +94,14 @@ def set_stage(s: Stage):
     global job_stage
     job_stage = s
 
-# CORS for GitHub Pages (your site)
+# Read from .env, defaulting to "*" if missing
+origins_str = os.getenv("ALLOWED_ORIGINS", "*")
+allow_origins_list = origins_str.split(",")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://pltyps.github.io"],
-    allow_origin_regex=r"https://.*\.github\.io$",
-    allow_credentials=True,
+    allow_origins=allow_origins_list,  # Will now safely accept ["*"]
+    allow_credentials=False,           # Changed to False
     allow_methods=["*"],
     allow_headers=["*"],
     expose_headers=["X-App"],

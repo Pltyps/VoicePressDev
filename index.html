@@ -81,7 +81,7 @@
         <div class="card">
           <label class="upload-area" for="videoFile">
             <strong id="uploadLabel">Drag & drop or click to select an MP4</strong>
-            <div class="meta">Accepted: .mp4 · Max size: 1 GB</div>
+            <div class="meta">Accepted: .mp4 · Max size: 100 MB (client-enforced)</div>
             <input id="videoFile" name="file" type="file" accept="video/mp4" />
           </label>
 
@@ -118,10 +118,37 @@
           </div>
 
           <div class="outputs" id="outputs" style="margin-top:12px">
-            <div class="output-card" id="summaryCard"><strong>Summary</strong><div id="summary" class="muted">No results yet</div></div>
-            <div class="output-card" id="quotesCard"><strong>Quotes</strong><div id="quotes" class="muted">No quotes found</div></div>
-            <div class="output-card" id="socialCard"><strong>Social Posts</strong><div id="social" class="muted">No social posts</div></div>
-            <div class="output-card" id="transcriptCard"><strong>Transcript</strong><pre id="transcript" style="white-space:pre-wrap;max-height:240px;overflow:auto;margin:8px 0 0">Not available</pre></div>
+            <div class="output-card" id="summaryCard">
+              <div style="display:flex;justify-content:space-between;align-items:center">
+                <strong>Summary</strong>
+                <button class="copy" data-copy-target="summary">Copy</button>
+              </div>
+              <div id="summary" class="muted">No results yet</div>
+            </div>
+
+            <div class="output-card" id="quotesCard">
+              <div style="display:flex;justify-content:space-between;align-items:center">
+                <strong>Quotes</strong>
+                <button class="copy" data-copy-target="quotes">Copy</button>
+              </div>
+              <div id="quotes" class="muted">No quotes found</div>
+            </div>
+
+            <div class="output-card" id="socialCard">
+              <div style="display:flex;justify-content:space-between;align-items:center">
+                <strong>Social Posts</strong>
+                <button class="copy" data-copy-target="social">Copy</button>
+              </div>
+              <div id="social" class="muted">No social posts</div>
+            </div>
+
+            <div class="output-card" id="transcriptCard">
+              <div style="display:flex;justify-content:space-between;align-items:center">
+                <strong>Transcript</strong>
+                <button class="copy" data-copy-target="transcript">Copy</button>
+              </div>
+              <pre id="transcript" style="white-space:pre-wrap;max-height:240px;overflow:auto;margin:8px 0 0">Not available</pre>
+            </div>
           </div>
         </div>
       </div>

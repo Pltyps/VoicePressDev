@@ -1,36 +1,38 @@
 const BACKEND_URL = "https://voicepress-live-api.onrender.com";
+// client-enforced upload size limit (100 MB) to match free-tier constraints
+const MAX_UPLOAD_BYTES = 100 * 1024 * 1024;
 // const BACKEND_URL = "http://127.0.0.1:8000"; // for local testing
 
 document.addEventListener("DOMContentLoaded", () => {
-  const form = document.getElementById("uploadForm");
   const fileInput = document.getElementById("videoFile");
-  const statusEl = document.getElementById("uploadStatus");
-  const spinner = document.getElementById("spinner");
+  const uploadBtn = document.getElementById("uploadBtn");
+  const clearBtn = document.getElementById("clearBtn");
+  const uploadLabel = document.getElementById("uploadLabel") || document.querySelector('.upload-area strong');
+  const progressWrap = document.getElementById("progressWrap");
   const progressBar = document.getElementById("uploadProgress");
-  const output = document.getElementById("output");
-  const fileNameDisplay = document.getElementById("fileName");
-  const submitButton = form.querySelector("button");
-  const statusLight = document.getElementById("statusLight");
+  const outputs = document.getElementById("outputs");
+  const processingState = document.getElementById("processingState");
+  const statusText = document.getElementById("statusText");
 
   // ---- helpers ----
   let processingPoller = null;
   let normalPoller = null;
 
+  // Update simple UI stage using the new layout
   function setStage(message, opts = {}) {
-    statusEl.textContent = message;
-    if (opts.showSpinner !== undefined)
-      spinner.style.display = opts.showSpinner ? "block" : "none";
+    if (statusText) statusText.textContent = message;
     if (opts.progress === "hide") {
-      progressBar.style.display = "none";
+      if (progressWrap) progressWrap.style.display = "none";
     } else if (opts.progress === "determinate") {
-      progressBar.style.display = "block";
-      if (!progressBar.hasAttribute("value")) progressBar.value = 0;
+      if (progressWrap) progressWrap.style.display = "block";
+      if (progressBar && !progressBar.hasAttribute("value")) progressBar.value = 0;
     } else if (opts.progress === "indeterminate") {
-      progressBar.style.display = "block";
-      progressBar.removeAttribute("value");
+      if (progressWrap) progressWrap.style.display = "block";
+      if (progressBar) progressBar.removeAttribute("value");
     }
-    if (opts.disableButton !== undefined)
-      submitButton.disabled = opts.disableButton;
+    if (opts.disableButton !== undefined && uploadBtn)
+      uploadBtn.disabled = opts.disableButton;
+    if (processingState) processingState.textContent = message;
   }
 
   // speed up status polling while a job is running
@@ -87,16 +89,138 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // show selected file name
+  // update label with filename
   fileInput.addEventListener("change", () => {
-    fileNameDisplay.textContent = fileInput.files.length
-      ? fileInput.files[0].name
-      : "No file chosen";
+    const f = fileInput.files[0];
+    if (uploadLabel) uploadLabel.textContent = f ? f.name : "Drag & drop or click to select an MP4";
+    if (uploadBtn) uploadBtn.disabled = !f;
   });
 
+  // clear button
+  if (clearBtn) clearBtn.addEventListener('click', ()=>{
+    fileInput.value = '';
+    if (uploadLabel) uploadLabel.textContent = 'Drag & drop or click to select an MP4';
+    if (uploadBtn) uploadBtn.disabled = true;
+  });
+
+  // support drag & drop on the label area
+  const uploadArea = document.querySelector('.upload-area');
+  if (uploadArea) {
+    uploadArea.addEventListener('dragover', (ev)=>{ ev.preventDefault(); uploadArea.style.opacity = 0.9; });
+    uploadArea.addEventListener('dragleave', ()=>{ uploadArea.style.opacity = 1; });
+    uploadArea.addEventListener('drop', (ev)=>{
+      ev.preventDefault(); uploadArea.style.opacity = 1;
+      const f = ev.dataTransfer.files && ev.dataTransfer.files[0];
+      if (f && f.type && f.type.indexOf('video')===0) {
+        // assign to file input
+        const dt = new DataTransfer(); dt.items.add(f); fileInput.files = dt.files;
+        fileInput.dispatchEvent(new Event('change'));
+      } else {
+        Toastify({text:'Please drop a valid MP4 video file',duration:3000,gravity:'top',position:'right',backgroundColor:'#ff4d4f'}).showToast();
+      }
+    });
+  }
+
   // ---- upload handler ----
-  form.addEventListener("submit", function (e) {
-    e.preventDefault();
-    const file = fileInput.files[0];
+  // Listen for clicks or custom upload events
+  function doUpload(file){
+    if (!file) { Toastify({text:'No file selected',duration:2000,gravity:'top',position:'right',backgroundColor:'#ff4d4f'}).showToast(); return; }
+    if (file.size > MAX_UPLOAD_BYTES) {
+      const sizeMB = (MAX_UPLOAD_BYTES/1024/1024).toFixed(0);
+      const msg = `🚫 File too large — max ${sizeMB} MB on this plan. Trim or compress and try again.`;
+      Toastify({text:msg,duration:6000,gravity:'top',position:'right',backgroundColor:'#ff4d4f'}).showToast();
+      setStage(msg, { progress: 'hide', disableButton: false });
+      return;
+    }
+
+    // reset UI
+    if (outputs) outputs.innerHTML = '';
+    if (uploadBtn) uploadBtn.disabled = true;
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', `${BACKEND_URL}/upload`, true);
+    xhr.timeout = 1000 * 60 * 30; // 30 minutes
+
+    xhr.onloadstart = () => {
+      setStage('Uploading…', { progress: 'determinate', disableButton: true });
+      if (window.voicepress && window.voicepress.showProgress) window.voicepress.showProgress(0);
+      startProcessingPolling();
+      console.log('📤 Upload started:', file.name);
+    };
+
+    // upload progress
+    xhr.upload.addEventListener('progress', (e)=>{
+      if (e.lengthComputable) {
+        const percent = (e.loaded / e.total) * 100;
+        if (progressBar) progressBar.value = percent;
+        if (window.voicepress && window.voicepress.showProgress) window.voicepress.showProgress(percent);
+        setStage(`Uploading… ${percent.toFixed(1)}%`, { progress: 'determinate' });
+      }
+    });
+
+    xhr.upload.addEventListener('load', ()=>{
+      setStage('Upload complete. Processing…', { progress: 'indeterminate' });
+      if (window.voicepress && window.voicepress.showProgress) window.voicepress.showProgress(100);
+      console.log('📦 Upload finished; server is processing…');
+    });
+
+    xhr.onerror = () => {
+      stopProcessingPolling();
+      const statusCode = xhr.status || 0;
+      const looksLikeEdge = statusCode === 0 || statusCode === 502 || statusCode === 503 || statusCode === 504;
+      const msg = looksLikeEdge ? '🚨 Server unavailable. Retry shortly.' : '❌ Upload failed due to a network error.';
+      setStage(msg, { progress: 'hide', disableButton: false });
+      Toastify({text:msg,duration:4000,gravity:'top',position:'right',backgroundColor:'#ff4d4f'}).showToast();
+    };
+
+    xhr.ontimeout = ()=>{
+      stopProcessingPolling();
+      setStage('⏰ Request timed out while processing.', { progress: 'hide', disableButton: false });
+      Toastify({text:'Request timed out',duration:4000,gravity:'top',position:'right',backgroundColor:'#ff4d4f'}).showToast();
+    };
+
+    xhr.onload = ()=>{
+      stopProcessingPolling();
+      if (uploadBtn) uploadBtn.disabled = false;
+      if (window.voicepress && window.voicepress.hideProgress) window.voicepress.hideProgress();
+
+      let response = {};
+      try { response = JSON.parse(xhr.responseText || '{}'); } catch {
+        setStage('❌ Server returned invalid JSON.', { progress:'hide' });
+        Toastify({text:'Invalid server response',duration:3000,gravity:'top',position:'right',backgroundColor:'#ff4d4f'}).showToast();
+        if (fileInput) fileInput.value = '';
+        if (uploadLabel) uploadLabel.textContent = 'Drag & drop or click to select an MP4';
+        startNormalPolling();
+        return;
+      }
+
+      if (xhr.status === 200) {
+        setStage('✅ Processing complete!', { progress: 'hide' });
+        Toastify({text:'Processing complete',duration:2500,gravity:'top',position:'right',backgroundColor:'#16a34a'}).showToast();
+        // populate UI via helper
+        if (window.voicepress && window.voicepress.showResults) window.voicepress.showResults(response);
+        // also render legacy output section if present
+        renderContent(response);
+      } else {
+        const friendly = xhr.status === 429 ? '🚦 System busy. Try again.' : xhr.status === 413 ? '📦 File too large.' : (response.error || '❌ Upload/processing failed.');
+        setStage(friendly, { progress:'hide' });
+        Toastify({text:friendly,duration:4000,gravity:'top',position:'right',backgroundColor:'#ff4d4f'}).showToast();
+      }
+
+      if (fileInput) fileInput.value = '';
+      if (uploadLabel) uploadLabel.textContent = 'Drag & drop or click to select an MP4';
+      startNormalPolling();
+    };
+
+    xhr.send(formData);
+  }
+
+  // wire upload button and custom event
+  if (uploadBtn) uploadBtn.addEventListener('click', ()=> doUpload(fileInput.files[0]));
+  window.addEventListener('voicepress.upload', (e)=>{ if (e.detail && e.detail.file) doUpload(e.detail.file); });
     if (!file) {
       console.warn("🚫 No file selected.");
       return;
@@ -238,6 +362,22 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   initStatusLight();
+});
+
+// copy button handler for new UI (delegation)
+document.addEventListener('click', (e)=>{
+  const btn = e.target.closest && e.target.closest('button.copy');
+  if (!btn) return;
+  const targetId = btn.getAttribute('data-copy-target');
+  if (!targetId) return;
+  const el = document.getElementById(targetId);
+  if (!el) return;
+  const txt = el.tagName === 'PRE' ? el.textContent : el.innerText || el.textContent;
+  navigator.clipboard.writeText(txt || '').then(()=>{
+    Toastify({text:'✅ Copied to clipboard',duration:2000,gravity:'top',position:'right',backgroundColor:'#16a34a'}).showToast();
+  }).catch(()=>{
+    Toastify({text:'❌ Copy failed',duration:2000,gravity:'top',position:'right',backgroundColor:'#ff4d4f'}).showToast();
+  });
 });
 
 // ---- render GPT response content (unchanged) ----
