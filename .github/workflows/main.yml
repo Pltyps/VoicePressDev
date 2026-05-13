@@ -1,5 +1,41 @@
-- name: Generate Environment Config
+name: Deploy VoicePress Frontend
+
+on:
+  push:
+    branches: ["main"]
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Generate Environment Config
         run: |
-          # Creates a brand new file called env.js with your secret URL
+          # This creates the file that your code will read
           echo "window.VOICEPRESS_CONFIG = { API_URL: '${{ secrets.RENDER_BACKEND_URL }}' };" > env.js
-          echo "Config file created successfully."
+          echo "Generated env.js successfully."
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: '.'
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
