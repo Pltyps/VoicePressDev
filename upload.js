@@ -163,12 +163,9 @@ document.addEventListener("DOMContentLoaded", () => {
       setStage("Loading processing engine...", { progress: "indeterminate" });
 
       if (!ffmpeg.loaded) {
-        const baseURL =
-          "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/umd";
-
         await ffmpeg.load({
-          coreURL: `${baseURL}/ffmpeg-core.js`,
-          wasmURL: `${baseURL}/ffmpeg-core.wasm`,
+          coreURL: "./ffmpeg/ffmpeg-core.js",
+          wasmURL: "./ffmpeg/ffmpeg-core.wasm",
         });
       }
 
