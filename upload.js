@@ -163,14 +163,15 @@ document.addEventListener("DOMContentLoaded", () => {
       setStage("Loading processing engine...", { progress: "indeterminate" });
 
       if (!ffmpeg.loaded) {
-        // PROXY FIX: Fetch the worker script and create a Blob URL to bypass the SecurityError
+        // Fetch the worker script and create a local Blob URL
         const workerBlob = await fetch(
           "https://unpkg.com/@ffmpeg/ffmpeg@0.12.6/dist/umd/814.ffmpeg.js",
         ).then((r) => r.blob());
         const workerURL = URL.createObjectURL(workerBlob);
 
         await ffmpeg.load({
-          classWorkerURL: workerURL,
+          workerURL: workerURL, // ADD THIS: The primary key for v0.12
+          classWorkerURL: workerURL, // KEEP THIS: Fallback key
           coreURL:
             "https://unpkg.com/@ffmpeg/core-st@0.12.6/dist/umd/ffmpeg-core.js",
           wasmURL:
