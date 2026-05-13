@@ -1,0 +1,38 @@
+name: Deploy VoicePress Frontend
+
+on:
+  push:
+    branches: ["main"]
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Inject Backend URL
+        env:
+          # Pulls the secret you will set in the next step
+          ACTUAL_URL: ${{ secrets.RENDER_BACKEND_URL }}
+        run: |
+          # Replaces the placeholder with your actual Render URL
+          sed -i "s|__BACKEND_URL__|${{ env.ACTUAL_URL }}|g" index.html
+          sed -i "s|__BACKEND_URL__|${{ env.ACTUAL_URL }}|g" upload.js
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: '.'
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
