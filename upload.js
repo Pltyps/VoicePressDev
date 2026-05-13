@@ -1,5 +1,5 @@
 const BACKEND_URL =
-  window.VOICEPRESS_CONFIG?.API_URL || "http://localhost:10000";
+  window.VOICEPRESS_CONFIG?.API_URL || "https://voicepressdev.onrender.com";
 const MAX_UPLOAD_BYTES = 3 * 1024 * 1024 * 1024; // 3 GB
 
 document.addEventListener("DOMContentLoaded", () => {
