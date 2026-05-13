@@ -8,12 +8,10 @@ OpenAI client and reads configuration from a `.env` file.
 """
 
 import os
-import sys
 import json
 import logging
 import uuid
 import shutil
-import subprocess
 import re
 import threading
 from pathlib import Path
@@ -34,43 +32,19 @@ from openai import OpenAI
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("voicepress-api")
 
-def _mem_kb() -> Optional[int]:
-    try:
-        import resource  # type: ignore
-        return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
-    except Exception:
-        return None
+# 3. Load Env and Initialize Client ONCE
+load_dotenv()
+api_key = os.getenv("OPENAI_API_KEY")
 
-def log_memory(tag: str):
-    kb = _mem_kb()
-    if kb is not None:
-        logger.info(f"🧠 {tag} | ru_maxrss={kb} KB")
+if not api_key:
+    logger.error("❌ OPENAI_API_KEY is missing!")
+    # Do not exit yet to allow health checks to pass
+    client = None
+else:
+    client = OpenAI(api_key=api_key)
+    logger.info("🔑 OpenAI client initialized")
 
-def log_tmp_disk(tag: str = "boot"):
-    try:
-        total, used, free = shutil.disk_usage("/tmp")
-        logger.info(f"💽 /tmp ({tag}) -> total={total/1_073_741_824:.2f} GiB, used={used/1_073_741_824:.2f} GiB, free={free/1_073_741_824:.2f} GiB")
-    except Exception:
-        logger.info("💽 /tmp capacity check failed")
-
-# ---------- Env / OpenAI ----------
-# 3. USE THIS SAFE INITIALIZATION BLOCK (The duplicate broken one is removed)
-try:
-    load_dotenv()
-
-    api_key = os.getenv("OPENAI_API_KEY")
-    if api_key:
-        client = OpenAI(api_key=api_key)
-        logger.info("🔑 OPENAI_API_KEY loaded and OpenAI client initialized")
-    else:
-        logger.warning("⚠️ OPENAI_API_KEY not set — OpenAI client not initialized (tests/dev mode)")
-except Exception:
-    logger.exception("💥 Failed to load .env or initialize OpenAI client")
-
-logger.info("👋 GPT API server starting...")
-log_tmp_disk("startup")
-
-# ---------- FastAPI / State ----------
+# 4. Define FastAPI app
 app = FastAPI()
 
 class Stage(str, Enum):

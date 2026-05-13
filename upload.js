@@ -159,12 +159,13 @@ document.addEventListener("DOMContentLoaded", () => {
   // 3. The Core Processing and Upload Logic
   async function processAndUpload(file) {
     try {
-      // LOAD FFMPEG
-      setStage("Loading processing engine in your browser...", {
-        progress: "indeterminate",
-      });
+      setStage("Loading processing engine...", { progress: "indeterminate" });
       if (!ffmpeg.loaded) {
-        await ffmpeg.load();
+        // FORCE SINGLE-THREADED MODE FOR GITHUB PAGES COMPATIBILITY
+        await ffmpeg.load({
+          coreURL:
+            "https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.js",
+        });
       }
 
       // WRITE VIDEO TO BROWSER MEMORY
