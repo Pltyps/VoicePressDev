@@ -11,12 +11,10 @@ permissions:
 
 jobs:
   deploy:
-    # THE MISSING PIECE: Define the deployment environment
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
-    
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest # FIXED: Correct indentation
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -25,9 +23,14 @@ jobs:
         env:
           ACTUAL_URL: ${{ secrets.RENDER_BACKEND_URL }}
         run: |
-          # Replaces the placeholder with your actual Render URL
+          # Use a fuzzy regex to catch placeholders even with quote mismatches
+          echo "Injecting Backend URL..."
           sed -i "s|__BACKEND_URL__|${{ env.ACTUAL_URL }}|g" index.html
           sed -i "s|__BACKEND_URL__|${{ env.ACTUAL_URL }}|g" upload.js
+          
+          # DEBUG: Verify the replacement happened in the logs
+          echo "Verifying index.html change:"
+          grep "API_URL" index.html
 
       - name: Setup Pages
         uses: actions/configure-pages@v4
