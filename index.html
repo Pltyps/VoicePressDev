@@ -7,11 +7,13 @@
     </title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-    <!-- Toastify CSS -->
     <link
       rel="stylesheet"
       href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css"
     />
+
+    <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.12.7/dist/umd/ffmpeg.js"></script>
+    <script src="https://unpkg.com/@ffmpeg/util@0.12.1/dist/umd/index.js"></script>
 
     <style>
       :root {
@@ -36,15 +38,18 @@
         color: #0f172a;
       }
       .container {
-        max-width: 960px;
-        margin: 28px auto;
-        padding: 20px;
+        /* Fluid width that expands beautifully on ultrawides */
+        width: 95%;
+        max-width: 1600px;
+        margin: 2vh auto;
+        padding: 1rem;
       }
       header {
         display: flex;
         align-items: center;
         justify-content: space-between;
         gap: 16px;
+        flex-wrap: wrap; /* Allows stacking on very small mobile screens */
       }
       .brand {
         display: flex;
@@ -61,33 +66,42 @@
         justify-content: center;
         color: #fff;
         font-weight: 700;
+        flex-shrink: 0;
       }
       h1 {
-        font-size: 1.25rem;
+        font-size: clamp(1.1rem, 2vw, 1.25rem);
         margin: 0;
       }
       p.lead {
-        margin: 6px 0 0;
+        margin: 4px 0 0;
         color: var(--muted);
+        font-size: 0.95rem;
       }
 
+      /* Fluid Main Grid */
       .grid {
         display: grid;
-        grid-template-columns: 1fr;
-        gap: 18px;
-        margin-top: 20px;
+        grid-template-columns: 1fr; /* Mobile default */
+        gap: 20px;
+        margin-top: 24px;
       }
-      @media (min-width: 880px) {
+      @media (min-width: 768px) {
         .grid {
-          grid-template-columns: 360px 1fr;
+          grid-template-columns: 340px 1fr; /* Tablet / Small Laptop */
+        }
+      }
+      @media (min-width: 1200px) {
+        .grid {
+          grid-template-columns: 400px 1fr; /* Ultrawide / Large Desktop */
         }
       }
 
       .card {
         background: var(--card);
         border-radius: var(--radius);
-        padding: 18px;
+        padding: 20px;
         box-shadow: 0 6px 18px rgba(2, 6, 23, 0.06);
+        height: 100%;
       }
 
       /* Status */
@@ -95,6 +109,7 @@
         display: flex;
         align-items: center;
         gap: 10px;
+        padding: 10px 16px;
       }
       .status-dot {
         width: 12px;
@@ -108,31 +123,69 @@
         color: var(--muted);
       }
 
-      /* Upload area */
+      /* GitHub-Style Upload Area */
       .upload-area {
-        border: 2px dashed rgba(2, 6, 23, 0.06);
-        padding: 14px;
-        border-radius: 10px;
+        border: 2px dashed #d0d7de;
+        background-color: #f6f8fa;
+        border-radius: 6px;
+        padding: 48px 20px;
         text-align: center;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition:
+          border-color 0.2s,
+          background-color 0.2s;
+      }
+      .upload-area:hover,
+      .upload-area.drag-active {
+        border-color: #0969da;
+        background-color: #f3f6fa;
+      }
+      .upload-area svg {
+        fill: #57606a;
+        margin-bottom: 12px;
+        transition: fill 0.2s;
+      }
+      .upload-area:hover svg,
+      .upload-area.drag-active svg {
+        fill: #0969da;
+      }
+      .upload-area strong {
+        color: #0969da;
+        font-weight: 600;
+        font-size: 14px;
+        margin-bottom: 4px;
+      }
+      .upload-area .meta {
+        color: #57606a;
+        font-size: 12px;
+        margin-top: 0;
       }
       .upload-area input[type="file"] {
         display: none;
       }
+
+      /* Buttons & Progress */
       .upload-cta {
         display: inline-flex;
         align-items: center;
+        justify-content: center;
         gap: 10px;
-        padding: 10px 14px;
+        padding: 12px 16px;
         background: linear-gradient(90deg, var(--accent), #7c3aed);
         color: white;
         border-radius: 8px;
         border: none;
         cursor: pointer;
+        font-weight: 500;
+        flex: 1;
       }
-      .meta {
-        margin-top: 8px;
-        color: var(--muted);
-        font-size: 0.9rem;
+      .upload-cta:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
       }
 
       progress {
@@ -146,57 +199,69 @@
         background: var(--accent);
       }
 
-      /* Processing area */
-      .processing {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-      }
-      .spinner {
-        width: 34px;
-        height: 34px;
-        border-radius: 999px;
-        border: 4px solid #e6eefc;
-        border-top-color: var(--accent);
-        animation: spin 1s linear infinite;
-      }
-      @keyframes spin {
-        to {
-          transform: rotate(360deg);
-        }
-      }
-
-      /* Output columns */
+      /* Magic Output Grid */
       .outputs {
         display: grid;
-        grid-template-columns: 1fr;
-        gap: 12px;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 16px;
+        margin-top: 16px;
       }
-      @media (min-width: 880px) {
-        .outputs {
-          grid-template-columns: repeat(2, 1fr);
-        }
-      }
+
       .output-card {
-        background: linear-gradient(180deg, transparent, rgba(2, 6, 23, 0.02));
-        padding: 12px;
+        background: rgba(248, 250, 252, 0.8);
+        border: 1px solid rgba(2, 6, 23, 0.04);
+        padding: 16px;
         border-radius: 10px;
+        display: flex;
+        flex-direction: column;
       }
+      .output-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 12px;
+      }
+
       .muted {
         color: var(--muted);
         font-size: 0.95rem;
+        line-height: 1.5;
       }
 
       .copy {
         background: transparent;
-        border: 1px solid rgba(2, 6, 23, 0.06);
-        padding: 6px 8px;
-        border-radius: 8px;
+        border: 1px solid rgba(2, 6, 23, 0.1);
+        padding: 6px 12px;
+        border-radius: 6px;
         cursor: pointer;
+        font-size: 0.85rem;
+        transition: background 0.2s;
+      }
+      .copy:hover {
+        background: rgba(2, 6, 23, 0.04);
+      }
+
+      /* Responsive Transcript Box */
+      .transcript-box {
+        white-space: pre-wrap;
+        overflow-y: auto;
+        margin: 0;
+        max-height: 240px;
+        padding: 12px;
+        background: #ffffff;
+        border-radius: 8px;
+        border: 1px solid rgba(2, 6, 23, 0.05);
+        font-family: monospace;
+        font-size: 0.9rem;
+      }
+      @media (min-width: 1200px) {
+        .transcript-box {
+          max-height: 400px;
+        }
       }
 
       footer {
-        margin-top: 26px;
+        margin-top: 32px;
         text-align: center;
         color: var(--muted);
         font-size: 0.9rem;
@@ -223,15 +288,23 @@
       </header>
 
       <div class="grid">
-        <div>
+        <div style="display: flex; flex-direction: column; gap: 16px">
           <div class="card">
-            <label class="upload-area" for="videoFile">
-              <strong id="uploadLabel"
-                >Drag & drop or click to select an MP4</strong
+            <label class="upload-area" for="videoFile" id="uploadDropzone">
+              <svg
+                width="32"
+                height="32"
+                viewBox="0 0 24 24"
+                aria-hidden="true"
               >
-              <div class="meta">
-                Accepted: .mp4 · Max size: 100 MB (client-enforced)
-              </div>
+                <path
+                  fill-rule="evenodd"
+                  d="M12 3a1 1 0 0 1 .707.293l4 4a1 1 0 0 1-1.414 1.414L13 6.414V15a1 1 0 1 1-2 0V6.414L8.707 8.707a1 1 0 1 1-1.414-1.414l4-4A1 1 0 0 1 12 3zm-7 14a1 1 0 0 1 1-1h12a1 1 0 1 1 0 2H6a1 1 0 0 1-1-1z"
+                ></path>
+              </svg>
+              <strong id="uploadLabel">Choose your MP4 files</strong>
+              <div class="meta">or drag and drop them here</div>
+              <div class="meta" style="margin-top: 8px">Max size: 3.5 GB</div>
               <input
                 id="videoFile"
                 name="file"
@@ -240,15 +313,17 @@
               />
             </label>
 
-            <div style="margin-top: 12px; display: flex; gap: 10px">
+            <div style="margin-top: 16px; display: flex; gap: 10px">
               <button id="uploadBtn" class="upload-cta" disabled>
                 Upload & Process
               </button>
               <button id="clearBtn" class="copy" type="button">Clear</button>
             </div>
 
-            <div style="margin-top: 12px; display: none" id="progressWrap">
-              <div class="muted">Uploading / Processing</div>
+            <div style="margin-top: 16px; display: none" id="progressWrap">
+              <div class="muted" style="margin-bottom: 6px">
+                Uploading / Processing
+              </div>
               <progress id="uploadProgress" value="0" max="100"></progress>
               <div
                 style="
@@ -258,22 +333,29 @@
                   justify-content: space-between;
                 "
               >
-                <div class="muted" id="progressText">0%</div>
-                <div id="actionHint" class="muted">
+                <div class="muted" id="progressText" style="font-weight: bold">
+                  0%
+                </div>
+                <div id="actionHint" class="muted" style="font-size: 0.8rem">
                   You can leave this page; processing continues.
                 </div>
               </div>
             </div>
           </div>
 
-          <div class="card" style="margin-top: 14px">
+          <div class="card">
             <div class="muted"><strong>Quick Tips</strong></div>
-            <ul style="margin: 8px 0 0 18px; color: var(--muted)">
+            <ul
+              style="
+                margin: 12px 0 0 18px;
+                color: var(--muted);
+                line-height: 1.6;
+                font-size: 0.9rem;
+              "
+            >
               <li>Use MP4 files exported from common recorders</li>
-              <li>Keep interviews under 1 GB for reliable uploads</li>
-              <li>
-                Secrets (OpenAI API key) must be set in environment variables
-              </li>
+              <li>Processing utilizes your browser to save data</li>
+              <li>Keep interviews under 3.5 GB for reliable uploads</li>
             </ul>
           </div>
         </div>
@@ -284,85 +366,73 @@
               style="
                 display: flex;
                 justify-content: space-between;
-                align-items: center;
+                align-items: flex-start;
+                flex-wrap: wrap;
+                gap: 10px;
               "
             >
               <div>
-                <strong>Results</strong>
-                <div class="muted" style="font-size: 0.85rem">
+                <strong style="font-size: 1.1rem">Results</strong>
+                <div class="muted" style="font-size: 0.85rem; margin-top: 2px">
                   Summary, quotes & posts appear here
                 </div>
               </div>
-              <div id="processingState" class="muted">Idle</div>
+              <div
+                id="processingState"
+                class="muted"
+                style="
+                  background: rgba(2, 6, 23, 0.05);
+                  padding: 4px 10px;
+                  border-radius: 6px;
+                "
+              >
+                Idle
+              </div>
             </div>
 
-            <div class="outputs" id="outputs" style="margin-top: 12px">
+            <div class="outputs" id="outputs">
               <div class="output-card" id="summaryCard">
-                <div
-                  style="
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                  "
-                >
+                <div class="output-header">
                   <strong>Summary</strong>
                   <button class="copy" data-copy-target="summary">Copy</button>
                 </div>
-                <div id="summary" class="muted">No results yet</div>
+                <div id="summary" class="muted" style="flex: 1">
+                  No results yet
+                </div>
               </div>
 
               <div class="output-card" id="quotesCard">
-                <div
-                  style="
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                  "
-                >
+                <div class="output-header">
                   <strong>Quotes</strong>
                   <button class="copy" data-copy-target="quotes">Copy</button>
                 </div>
-                <div id="quotes" class="muted">No quotes found</div>
+                <div id="quotes" class="muted" style="flex: 1">
+                  No quotes found
+                </div>
               </div>
 
               <div class="output-card" id="socialCard">
-                <div
-                  style="
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                  "
-                >
+                <div class="output-header">
                   <strong>Social Posts</strong>
                   <button class="copy" data-copy-target="social">Copy</button>
                 </div>
-                <div id="social" class="muted">No social posts</div>
+                <div id="social" class="muted" style="flex: 1">
+                  No social posts
+                </div>
               </div>
 
-              <div class="output-card" id="transcriptCard">
-                <div
-                  style="
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                  "
-                >
+              <div
+                class="output-card"
+                id="transcriptCard"
+                style="grid-column: 1 / -1"
+              >
+                <div class="output-header">
                   <strong>Transcript</strong>
                   <button class="copy" data-copy-target="transcript">
                     Copy
                   </button>
                 </div>
-                <pre
-                  id="transcript"
-                  style="
-                    white-space: pre-wrap;
-                    max-height: 240px;
-                    overflow: auto;
-                    margin: 8px 0 0;
-                  "
-                >
-Not available</pre
-                >
+                <pre id="transcript" class="transcript-box">Not available</pre>
               </div>
             </div>
           </div>
@@ -378,7 +448,6 @@ Not available</pre
     </div>
 
     <script>
-      // Point directly to the live backend URL
       const API_URL = "https://voicepress-live-api.onrender.com";
 
       async function checkHealth() {
@@ -402,7 +471,6 @@ Not available</pre
       checkHealth();
       setInterval(checkHealth, 30000);
 
-      // Wire simple UI interactions without overriding upload.js behavior
       const fileInput = document.getElementById("videoFile");
       const uploadBtn = document.getElementById("uploadBtn");
       const clearBtn = document.getElementById("clearBtn");
@@ -419,14 +487,14 @@ Not available</pre
           fileLabel.textContent = f.name;
         } else {
           uploadBtn.disabled = true;
-          fileLabel.textContent = "Drag & drop or click to select an MP4";
+          fileLabel.textContent = "Choose your MP4 files";
         }
       });
 
       clearBtn.addEventListener("click", () => {
         fileInput.value = "";
         uploadBtn.disabled = true;
-        fileLabel.textContent = "Drag & drop or click to select an MP4";
+        fileLabel.textContent = "Choose your MP4 files";
       });
 
       window.voicepress = window.voicepress || {};

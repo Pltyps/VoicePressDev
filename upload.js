@@ -1,5 +1,5 @@
 const BACKEND_URL = "https://voicepress-live-api.onrender.com";
-const MAX_UPLOAD_BYTES = 100 * 1024 * 1024; // 100MB limit
+const MAX_UPLOAD_BYTES = 3.5 * 1024 * 1024 * 1024; // 3.5 GB
 
 document.addEventListener("DOMContentLoaded", () => {
   const fileInput = document.getElementById("videoFile");
@@ -12,6 +12,10 @@ document.addEventListener("DOMContentLoaded", () => {
   const progressBar = document.getElementById("uploadProgress");
   const outputs = document.getElementById("outputs");
   const processingState = document.getElementById("processingState");
+
+  const { FFmpeg } = window.FFmpegWASM;
+  const { fetchFile } = window.FFmpegUtil;
+  const ffmpeg = new FFmpeg();
 
   let processingPoller = null;
 
@@ -97,7 +101,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // Core Upload Handler
-  function doUpload(file) {
+  async function doUpload(file) {
     if (!file) {
       Toastify({
         text: "No file selected",
@@ -108,6 +112,8 @@ document.addEventListener("DOMContentLoaded", () => {
       }).showToast();
       return;
     }
+
+    // 1. Check File Size (3.5GB limit)
     if (file.size > MAX_UPLOAD_BYTES) {
       const sizeMB = (MAX_UPLOAD_BYTES / 1024 / 1024).toFixed(0);
       const msg = `🚫 File too large — max ${sizeMB} MB. Trim or compress and try again.`;
@@ -123,118 +129,172 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     if (uploadBtn) uploadBtn.disabled = true;
-    const formData = new FormData();
-    formData.append("file", file);
 
-    const xhr = new XMLHttpRequest();
-    xhr.open("POST", `${BACKEND_URL}/upload`, true);
-    xhr.timeout = 1000 * 60 * 30; // 30 mins
+    // 2. Check Video Duration (Max 55 mins for OpenAI's 25MB limit at 64k bitrate)
+    const video = document.createElement("video");
+    video.preload = "metadata";
+    video.onloadedmetadata = async function () {
+      window.URL.revokeObjectURL(video.src);
+      const durationMinutes = video.duration / 60;
 
-    xhr.onloadstart = () => {
-      setStage("Uploading…", { progress: "determinate", disableButton: true });
-      if (window.voicepress && window.voicepress.showProgress)
-        window.voicepress.showProgress(0);
-      startProcessingPolling();
-    };
-
-    xhr.upload.addEventListener("progress", (e) => {
-      if (e.lengthComputable) {
-        const percent = (e.loaded / e.total) * 100;
-        if (progressBar) progressBar.value = percent;
-        if (window.voicepress && window.voicepress.showProgress)
-          window.voicepress.showProgress(percent);
-        setStage(`Uploading…`, { progress: "determinate" });
-      }
-    });
-
-    xhr.upload.addEventListener("load", () => {
-      setStage("Processing…", { progress: "indeterminate" });
-      if (window.voicepress && window.voicepress.showProgress)
-        window.voicepress.showProgress(100);
-    });
-
-    xhr.onerror = () => {
-      stopProcessingPolling();
-      setStage("❌ Network error.", { progress: "hide", disableButton: false });
-      Toastify({
-        text: "Network error connecting to server.",
-        duration: 4000,
-        gravity: "top",
-        position: "right",
-        backgroundColor: "#ff4d4f",
-      }).showToast();
-    };
-
-    xhr.ontimeout = () => {
-      stopProcessingPolling();
-      setStage("⏰ Request timed out.", {
-        progress: "hide",
-        disableButton: false,
-      });
-      Toastify({
-        text: "Request timed out.",
-        duration: 4000,
-        gravity: "top",
-        position: "right",
-        backgroundColor: "#ff4d4f",
-      }).showToast();
-    };
-
-    xhr.onload = () => {
-      stopProcessingPolling();
-      if (uploadBtn) uploadBtn.disabled = false;
-      if (window.voicepress && window.voicepress.hideProgress)
-        window.voicepress.hideProgress();
-
-      let response = {};
-      try {
-        response = JSON.parse(xhr.responseText || "{}");
-      } catch {
-        setStage("❌ Server error.", { progress: "hide" });
+      if (durationMinutes > 55) {
+        setStage("🚫 Video is too long. Max duration is 55 minutes.", {
+          progress: "hide",
+          disableButton: false,
+        });
         Toastify({
-          text: "Invalid server response",
-          duration: 3000,
-          gravity: "top",
-          position: "right",
+          text: "Video exceeds 55 minute limit.",
+          duration: 6000,
           backgroundColor: "#ff4d4f",
         }).showToast();
         return;
       }
 
-      if (xhr.status === 200) {
-        setStage("Done", { progress: "hide" });
-        Toastify({
-          text: "Processing complete",
-          duration: 2500,
-          gravity: "top",
-          position: "right",
-          backgroundColor: "#16a34a",
-        }).showToast();
-        if (window.voicepress && window.voicepress.showResults)
-          window.voicepress.showResults(response);
-      } else {
-        const friendly =
-          xhr.status === 429
-            ? "🚦 System busy. Try again."
-            : xhr.status === 413
-              ? "📦 File too large."
-              : response.error || "❌ Processing failed.";
-        setStage("Error", { progress: "hide" });
-        Toastify({
-          text: friendly,
-          duration: 4000,
-          gravity: "top",
-          position: "right",
-          backgroundColor: "#ff4d4f",
-        }).showToast();
+      // If duration is good, proceed to FFmpeg extraction
+      await processAndUpload(file);
+    };
+    video.src = URL.createObjectURL(file);
+  }
+
+  // 3. The Core Processing and Upload Logic
+  async function processAndUpload(file) {
+    try {
+      // LOAD FFMPEG
+      setStage("Loading processing engine in your browser...", {
+        progress: "indeterminate",
+      });
+      if (!ffmpeg.loaded) {
+        await ffmpeg.load();
       }
 
-      if (fileInput) fileInput.value = "";
-      if (uploadLabel)
-        uploadLabel.textContent = "Drag & drop or click to select an MP4";
-    };
+      // WRITE VIDEO TO BROWSER MEMORY
+      setStage("Extracting audio locally (this saves your data!)...", {
+        progress: "indeterminate",
+      });
+      await ffmpeg.writeFile("input.mp4", await fetchFile(file));
 
-    xhr.send(formData);
+      // RUN THE EXTRACTION COMMAND (With the Memory Crash Catcher)
+      try {
+        await ffmpeg.exec([
+          "-i",
+          "input.mp4",
+          "-vn",
+          "-ac",
+          "1",
+          "-b:a",
+          "64k",
+          "output.mp3",
+        ]);
+      } catch (execError) {
+        // If the browser tab runs out of memory, Wasm throws an abort error
+        if (
+          execError.message &&
+          (execError.message.includes("OOM") ||
+            execError.message.includes("abort"))
+        ) {
+          setStage(
+            "🚫 Browser out of memory. File is too large to process locally.",
+            { progress: "hide", disableButton: false },
+          );
+          Toastify({
+            text: "Memory crash: Try closing other browser tabs or compressing the file.",
+            duration: 6000,
+            backgroundColor: "#ff4d4f",
+          }).showToast();
+          return; // Stop the upload
+        }
+        throw execError; // Throw other unexpected errors to the main catch block
+      }
+
+      // READ THE NEW AUDIO FILE
+      const fileData = await ffmpeg.readFile("output.mp3");
+      const audioBlob = new Blob([fileData.buffer], { type: "audio/mp3" });
+
+      // Cleanup browser memory immediately
+      await ffmpeg.deleteFile("input.mp4");
+      await ffmpeg.deleteFile("output.mp3");
+
+      // UPLOAD THE TINY AUDIO FILE TO RENDER
+      const formData = new FormData();
+      formData.append("file", audioBlob, "audio.mp3");
+
+      const xhr = new XMLHttpRequest();
+      xhr.open("POST", `${BACKEND_URL}/upload`, true);
+
+      xhr.onloadstart = () => {
+        setStage("Uploading extracted audio to AI...", {
+          progress: "determinate",
+        });
+        startProcessingPolling();
+      };
+
+      xhr.upload.addEventListener("progress", (e) => {
+        if (e.lengthComputable) {
+          const percent = (e.loaded / e.total) * 100;
+          if (progressBar) progressBar.value = percent;
+        }
+      });
+
+      xhr.onload = () => {
+        stopProcessingPolling();
+        if (uploadBtn) uploadBtn.disabled = false;
+
+        let response = {};
+        try {
+          response = JSON.parse(xhr.responseText || "{}");
+        } catch {
+          setStage("❌ Server error.", { progress: "hide" });
+          Toastify({
+            text: "Invalid server response",
+            duration: 3000,
+            gravity: "top",
+            position: "right",
+            backgroundColor: "#ff4d4f",
+          }).showToast();
+          return;
+        }
+
+        if (xhr.status === 200) {
+          setStage("Done", { progress: "hide" });
+          Toastify({
+            text: "Processing complete",
+            duration: 2500,
+            gravity: "top",
+            position: "right",
+            backgroundColor: "#16a34a",
+          }).showToast();
+          if (window.voicepress && window.voicepress.showResults)
+            window.voicepress.showResults(response);
+        } else {
+          const friendly =
+            xhr.status === 429
+              ? "🚦 System busy. Try again."
+              : xhr.status === 413
+                ? "📦 File too large."
+                : response.error || "❌ Processing failed.";
+          setStage("Error", { progress: "hide" });
+          Toastify({
+            text: friendly,
+            duration: 4000,
+            gravity: "top",
+            position: "right",
+            backgroundColor: "#ff4d4f",
+          }).showToast();
+        }
+
+        const fileInput = document.getElementById("videoFile");
+        const uploadLabel = document.getElementById("uploadLabel");
+        if (fileInput) fileInput.value = "";
+        if (uploadLabel)
+          uploadLabel.textContent = "Drag & drop or click to select an MP4";
+      };
+
+      xhr.send(formData);
+    } catch (error) {
+      console.error(error);
+      setStage("Error extracting audio locally.", { progress: "hide" });
+      if (uploadBtn) uploadBtn.disabled = false;
+    }
   }
 
   if (uploadBtn)

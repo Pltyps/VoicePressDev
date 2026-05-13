@@ -124,74 +124,17 @@ AUDIO_BITRATE = os.getenv("AUDIO_BITRATE", "96k")  # only for aac
 AUDIO_RATE = os.getenv("AUDIO_RATE", "16000")    # 16 kHz
 AUDIO_MONO = "1"
 FFMPEG_TIMEOUT_SECS = int(os.getenv("FFMPEG_TIMEOUT_SECS", "3600"))
-MAX_UPLOAD_BYTES = int(os.getenv("MAX_UPLOAD_BYTES", str(3 * 1024 * 1024 * 1024)))  # 3 GB default
-
-# ---------- Robust video save + audio extract ----------
-def _ffmpeg_extract_audio(src_path: str, out_path: str):
-    cmd = ["ffmpeg", "-hide_banner", "-loglevel", "error", "-i", src_path, "-vn", "-ac", AUDIO_MONO, "-ar", AUDIO_RATE]
-    if AUDIO_CODEC.lower() == "aac":
-        cmd += ["-c:a", "aac", "-b:a", AUDIO_BITRATE, out_path]
-    else:
-        cmd += ["-c:a", "flac", out_path]
-
-    proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=FFMPEG_TIMEOUT_SECS)
-    if proc.returncode != 0 or not os.path.exists(out_path) or os.path.getsize(out_path) == 0:
-        raise RuntimeError(f"ffmpeg failed: {proc.stderr[:500]}")
-
-async def _save_upload_to_temp_mp4(upload: UploadFile) -> str:
-    tmp_video = f"/tmp/in-{uuid.uuid4().hex}.mp4"
-    with open(tmp_video, "wb") as f:
-        while True:
-            chunk = await upload.read(1024 * 1024)  # 1 MB
-            if not chunk:
-                break
-            f.write(chunk)
-    return tmp_video
-
-async def extract_audio_from_upload(upload: UploadFile) -> str:
-    """Save full mp4 to disk, then extract audio. Robust for MP4s with moov at end."""
-    src_path = await _save_upload_to_temp_mp4(upload)
-    suffix = ".m4a" if AUDIO_CODEC.lower() == "aac" else ".flac"
-    out_path = f"/tmp/audio-{uuid.uuid4().hex}{suffix}"
-    try:
-        set_stage(Stage.extracting)
-        _ffmpeg_extract_audio(src_path, out_path)
-        return out_path
-    finally:
-        try:
-            os.remove(src_path)
-        except Exception:
-            pass
+MAX_UPLOAD_BYTES = int(os.getenv("MAX_UPLOAD_BYTES", str(3.5 * 1024 * 1024 * 1024)))  # 3 GB default
 
 # ---------- Whisper API (openai==0.28.0 style) ----------
 WHISPER_API_MODEL = os.getenv("WHISPER_API_MODEL", "whisper-1")
 WHISPER_LANGUAGE = os.getenv("WHISPER_LANGUAGE", "en")  # optional hint
 
-def _get_audio_duration(audio_path: str) -> float:
-    try:
-        result = subprocess.run(
-            ["ffprobe", "-v", "error", "-show_entries", "format=duration",
-             "-of", "default=noprint_wrappers=1:nokey=1", audio_path],
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
-        )
-        return float(result.stdout.strip())
-    except Exception:
-        return 0.0
-
 def transcribe_with_openai(audio_path: str) -> str:
     """Transcribe an audio file at `audio_path` using OpenAI Whisper.
 
-    Returns the transcribed text (empty string on short audio). The
-    function uses a retry wrapper to handle transient network errors.
+    The function uses a retry wrapper to handle transient network errors.
     """
-    # avoid API's 0.1s minimum error on truly empty/failed extractions
-    duration = _get_audio_duration(audio_path)
-    if duration < 0.1:
-        logger.warning(f"⏳ Extracted audio too short ({duration:.3f}s). Skipping transcription.")
-        return ""
-
-    # Transcription using the newer OpenAI client. We use a small retry
-    # wrapper for transient network failures / rate limits.
     set_stage(Stage.transcribing)
     try:
         from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
@@ -200,17 +143,14 @@ def transcribe_with_openai(audio_path: str) -> str:
         @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=1, max=10),
                retry=retry_if_exception_type((requests.exceptions.RequestException, OSError)))
         def _call_transcribe(path: str) -> str:
-            # New SDK style: client.audio.transcriptions.create(...)
             with open(path, "rb") as f:
                 resp = client.audio.transcriptions.create(file=f, model=WHISPER_API_MODEL, language=WHISPER_LANGUAGE)
 
-            # response shape may be an object or dict-like; try safe access
             text = ""
             try:
                 text = getattr(resp, "text", None) or resp.get("text")
             except Exception:
                 try:
-                    # Some SDK versions return choices/message structure
                     text = resp["text"] if isinstance(resp, dict) and "text" in resp else ""
                 except Exception:
                     text = ""
@@ -294,50 +234,38 @@ def upload_form():
     """
 
 @app.post("/upload")
-async def upload_mp4(file: UploadFile = File(...), request: Request = None):
+async def upload_audio(file: UploadFile = File(...)):
     global job_running
-    if not file.filename.lower().endswith(".mp4"):
-        return JSONResponse({"error": "Only .mp4 files are supported."}, status_code=400)
+    
+    # Notice we don't check for .mp4 anymore, because the frontend sends .mp3
+    if not file.filename.lower().endswith((".mp3", ".m4a", ".wav")):
+        return JSONResponse({"error": "Expected an audio file."}, status_code=400)
 
-    # optional fast fail based on Content-Length
-    try:
-        cl = request.headers.get("content-length")
-        if cl and cl.isdigit() and int(cl) > MAX_UPLOAD_BYTES:
-            return JSONResponse({"error": "File too large."}, status_code=413)
-    except Exception:
-        pass
-
-    audio_path = None
     with _job_lock:
         if job_running:
-            return JSONResponse({"error": "System is currently busy. Please wait."}, status_code=429)
+            return JSONResponse({"error": "System busy. Please wait."}, status_code=429)
         job_running = True
-        set_stage(Stage.extracting)
+        set_stage(Stage.transcribing)
 
+    audio_path = f"/tmp/audio-{uuid.uuid4().hex}.mp3"
     try:
-        # 1) Save full video & extract audio (robust)
-        audio_path = await extract_audio_from_upload(file)
-        log_tmp_disk("after_extract")
+        # 1. Save the tiny audio file from the browser
+        with open(audio_path, "wb") as f:
+            while chunk := await file.read(1024 * 1024):
+                f.write(chunk)
 
-        # 2) Transcribe with OpenAI Whisper API (0.28.0 method)
+        # 2. Transcribe immediately! No extraction needed!
         transcript = transcribe_with_openai(audio_path)
-        log_memory("after_transcribe")
-
-        # 3) Analyze with GPT
+        
+        # 3. Analyze
         set_stage(Stage.summarizing)
         analysis = await analyze_with_transcript(transcript)
         if "error" in analysis:
             return JSONResponse({"error": analysis["error"]}, status_code=500)
 
-        return JSONResponse({
-            "summary": analysis.get("summary", ""),
-            "quotes": analysis.get("quotes", []),
-            "social_posts": {
-                "linkedin": analysis.get("social_posts", {}).get("linkedin", []),
-                "instagram": analysis.get("social_posts", {}).get("instagram", [])
-            },
-            "transcript": transcript
-        })
+        # Merge transcript into response
+        analysis["transcript"] = transcript
+        return JSONResponse(analysis)
 
     except Exception as e:
         logger.exception("💥 Error during /upload processing")
@@ -347,12 +275,8 @@ async def upload_mp4(file: UploadFile = File(...), request: Request = None):
         set_stage(Stage.idle)
         with _job_lock:
             job_running = False
-        if audio_path and os.path.exists(audio_path):
-            try:
-                os.remove(audio_path)
-                logger.info(f"🧹 Temp audio deleted: {audio_path}")
-            except Exception:
-                pass
+        if os.path.exists(audio_path):
+            os.remove(audio_path)
 
 # ---------- GPT helper ----------
 async def analyze_with_transcript(transcript: str):
