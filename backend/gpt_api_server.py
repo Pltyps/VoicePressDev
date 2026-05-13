@@ -1,3 +1,12 @@
+"""
+Voice-Press backend API server.
+
+This module exposes a small FastAPI app that accepts MP4 uploads,
+extracts audio, transcribes using OpenAI's Whisper, and analyzes the
+transcript using an LLM. The file was migrated to use the modern
+OpenAI client and reads configuration from a `.env` file.
+"""
+
 import os
 import sys
 import json
@@ -17,7 +26,15 @@ from dotenv import load_dotenv
 from fastapi.middleware.cors import CORSMiddleware
 from enum import Enum
 
-import openai
+# Use the newer OpenAI client class. Old code used the legacy sdk patterns
+try:
+    # Newer openai python package exposes an OpenAI client class
+    from openai import OpenAI
+except Exception:
+    # Fallback to the legacy import name for error clarity
+    raise
+
+client: Optional["OpenAI"] = None
 
 # ---------- Logging ----------
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -48,14 +65,20 @@ try:
     dotenv_path = base_path / ".env"
     load_dotenv(dotenv_path=dotenv_path)
 
-    openai.api_key = os.getenv("OPENAI_API_KEY")
-    if not openai.api_key:
-        raise RuntimeError("❌ OPENAI_API_KEY is missing from environment")
-
-    logger.info("🔑 OPENAI_API_KEY loaded successfully")
+    api_key = os.getenv("OPENAI_API_KEY")
+    # Initialize the OpenAI client only if an API key is provided. During
+    # automated tests or in developer environments the key may be absent; in
+    # that case we keep `client = None` and allow tests to monkeypatch it.
+    if api_key:
+        client = OpenAI(api_key=api_key)
+        logger.info("🔑 OPENAI_API_KEY loaded and OpenAI client initialized")
+    else:
+        logger.warning("⚠️ OPENAI_API_KEY not set — OpenAI client not initialized (tests/dev mode)")
 except Exception:
-    logger.critical("💥 Failed to load .env or API key", exc_info=True)
-    sys.exit(1)
+    logger.exception("💥 Failed to load .env or initialize OpenAI client")
+    # Do not exit the process here; allow the module to be importable in test
+    # environments where an API key may not be present. Functions should handle
+    # `client is None` appropriately or tests should monkeypatch `client`.
 
 logger.info("👋 GPT API server starting...")
 log_tmp_disk("startup")
@@ -167,18 +190,44 @@ def _get_audio_duration(audio_path: str) -> float:
         return 0.0
 
 def transcribe_with_openai(audio_path: str) -> str:
+    """Transcribe an audio file at `audio_path` using OpenAI Whisper.
+
+    Returns the transcribed text (empty string on short audio). The
+    function uses a retry wrapper to handle transient network errors.
+    """
     # avoid API's 0.1s minimum error on truly empty/failed extractions
     duration = _get_audio_duration(audio_path)
     if duration < 0.1:
         logger.warning(f"⏳ Extracted audio too short ({duration:.3f}s). Skipping transcription.")
         return ""
 
+    # Transcription using the newer OpenAI client. We use a small retry
+    # wrapper for transient network failures / rate limits.
     set_stage(Stage.transcribing)
     try:
-        with open(audio_path, "rb") as f:
-            # Correct method for SDK 0.28.0:
-            resp = openai.Audio.transcribe(WHISPER_API_MODEL, f, language=WHISPER_LANGUAGE)
-            return (resp.get("text") or "").strip()
+        from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+        import requests
+
+        @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=1, max=10),
+               retry=retry_if_exception_type((requests.exceptions.RequestException, OSError)))
+        def _call_transcribe(path: str) -> str:
+            # New SDK style: client.audio.transcriptions.create(...)
+            with open(path, "rb") as f:
+                resp = client.audio.transcriptions.create(file=f, model=WHISPER_API_MODEL, language=WHISPER_LANGUAGE)
+
+            # response shape may be an object or dict-like; try safe access
+            text = ""
+            try:
+                text = getattr(resp, "text", None) or resp.get("text")
+            except Exception:
+                try:
+                    # Some SDK versions return choices/message structure
+                    text = resp["text"] if isinstance(resp, dict) and "text" in resp else ""
+                except Exception:
+                    text = ""
+            return (text or "").strip()
+
+        return _call_transcribe(audio_path)
     except Exception as e:
         logger.exception("💥 OpenAI Whisper transcription failed")
         raise RuntimeError(str(e))
@@ -318,6 +367,12 @@ async def upload_mp4(file: UploadFile = File(...), request: Request = None):
 
 # ---------- GPT helper ----------
 async def analyze_with_transcript(transcript: str):
+    """Analyze a transcript string and return a structured JSON dict.
+
+    The assistant is instructed (via `system_message`) to return strict
+    JSON containing keys `summary`, `quotes`, and `social_posts`. The
+    function calls the configured chat model and parses the JSON reply.
+    """
     system_message = (
         "You are a careful content assistant. Given a human interview transcript, return STRICT JSON with keys:\n"
         "  - summary: <= 8 sentences\n"
@@ -329,16 +384,47 @@ async def analyze_with_transcript(transcript: str):
         "3) Respond ONLY with JSON. No commentary.\n"
     )
     try:
-        response = openai.ChatCompletion.create(
-            model="gpt-4",
-            messages=[
-                {"role": "system", "content": system_message},
-                {"role": "user", "content": transcript or "(empty transcript)"}
-            ],
-            temperature=0.2
-        )
-        reply = response.choices[0].message["content"]
-        data = json.loads(reply)
+        # Wrap chat call with retries for transient errors (rate limits, network blips)
+        from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+        import requests
+
+        @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=1, max=10),
+               retry=retry_if_exception_type((requests.exceptions.RequestException, OSError)))
+        def _call_chat(messages: list) -> str:
+            # New SDK style: client.chat.completions.create(...)
+            resp = client.chat.completions.create(model=os.getenv("GPT_MODEL", "gpt-4"), messages=messages, temperature=0.2)
+
+            # Attempt to extract the chat content in a robust way that
+            # supports dict-like or object responses across SDK versions.
+            try:
+                # Try attribute-style
+                content = resp.choices[0].message.content
+            except Exception:
+                try:
+                    # Dict-like fallback
+                    content = resp["choices"][0]["message"]["content"]
+                except Exception:
+                    # Last resort, string-convert the response
+                    content = str(resp)
+            return content
+
+        messages = [
+            {"role": "system", "content": system_message},
+            {"role": "user", "content": transcript or "(empty transcript)"}
+        ]
+        reply = _call_chat(messages)
+
+        # Parse JSON reply from model output. Keep robust handling for extra
+        # whitespace or incidental text surrounding the JSON.
+        try:
+            # Strip leading/trailing non-json content when possible
+            first = reply.find("{")
+            last = reply.rfind("}")
+            json_text = reply if first == -1 or last == -1 else reply[first:last+1]
+            data = json.loads(json_text)
+        except json.JSONDecodeError:
+            logger.exception("💥 GPT returned malformed JSON")
+            return {"error": "GPT returned invalid JSON. Check system prompt or model output parsing.", "raw": reply}
 
         if isinstance(data, dict):
             raw_quotes = data.get("quotes", [])
@@ -350,9 +436,6 @@ async def analyze_with_transcript(transcript: str):
             data["social_posts"] = sp
         return data
 
-    except json.JSONDecodeError:
-        logger.exception("💥 GPT returned malformed JSON")
-        return {"error": "GPT returned invalid JSON. Check system prompt or model output parsing."}
     except Exception as e:
         logger.exception("💥 Error calling OpenAI GPT")
         return {"error": str(e)}

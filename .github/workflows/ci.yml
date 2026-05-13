@@ -1,0 +1,49 @@
+name: CI - Backend Tests
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  backend-tests:
+    name: Backend tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Fail if backend/.env is committed
+        run: |
+          if git ls-files --error-unmatch backend/.env >/dev/null 2>&1; then
+            echo "ERROR: backend/.env is tracked in the repo. Remove it and add to .gitignore.";
+            git ls-files --error-unmatch backend/.env || true
+            exit 1
+          else
+            echo "No backend/.env committed — OK";
+          fi
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('backend/requirements.txt', 'backend/requirements-dev.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f backend/requirements.txt ]; then python -m pip install -r backend/requirements.txt; fi
+          if [ -f backend/requirements-dev.txt ]; then python -m pip install -r backend/requirements-dev.txt; fi
+
+      - name: Run backend tests
+        working-directory: ./backend
+        run: |
+          python -m pytest -q

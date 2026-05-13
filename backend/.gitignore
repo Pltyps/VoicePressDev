@@ -1,0 +1,9 @@
+# Ignore local environment file with secrets
+.env
+
+# Byte-compiled / cache
+__pycache__/
+*.py[cod]
+
+# Virtualenv
+.venv/

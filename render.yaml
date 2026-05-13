@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: voicepress-backend
+    env: docker
+    plan: free # change as needed
+    dockerfilePath: backend/Dockerfile
+    envVars:
+      - key: OPENAI_API_KEY
+        fromDatabase: false
+        value: ""
+      - key: GPT_MODEL
+        fromDatabase: false
+        value: "gpt-4"
+      - key: WHISPER_API_MODEL
+        fromDatabase: false
+        value: "whisper-1"
+      - key: PORT
+        fromDatabase: false
+        value: "10000"
+    healthCheckPath: "/health"
+    autoDeploy: true
+    # If you want deploy hooks or build commands, add them here
