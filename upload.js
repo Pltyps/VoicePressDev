@@ -1,4 +1,4 @@
-const BACKEND_URL = "https://voicepress-live-api.onrender.com";
+const BACKEND_URL = "__BACKEND_URL__";
 const MAX_UPLOAD_BYTES = 3 * 1024 * 1024 * 1024; // 3 GB
 
 document.addEventListener("DOMContentLoaded", () => {
