@@ -1,5 +1,5 @@
 const BACKEND_URL = "https://voicepress-live-api.onrender.com";
-const MAX_UPLOAD_BYTES = 3.5 * 1024 * 1024 * 1024; // 3.5 GB
+const MAX_UPLOAD_BYTES = 3 * 1024 * 1024 * 1024; // 3 GB
 
 document.addEventListener("DOMContentLoaded", () => {
   const fileInput = document.getElementById("videoFile");

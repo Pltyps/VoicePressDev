@@ -98,7 +98,7 @@ AUDIO_BITRATE = os.getenv("AUDIO_BITRATE", "96k")  # only for aac
 AUDIO_RATE = os.getenv("AUDIO_RATE", "16000")    # 16 kHz
 AUDIO_MONO = "1"
 FFMPEG_TIMEOUT_SECS = int(os.getenv("FFMPEG_TIMEOUT_SECS", "3600"))
-MAX_UPLOAD_BYTES = int(os.getenv("MAX_UPLOAD_BYTES", str(int(3.5 * 1024 * 1024 * 1024))))  # 3 GB default
+MAX_UPLOAD_BYTES = int(os.getenv("MAX_UPLOAD_BYTES", str(int(3 * 1024 * 1024 * 1024))))  # 3 GB default
 
 # ---------- Whisper API (openai==0.28.0 style) ----------
 WHISPER_API_MODEL = os.getenv("WHISPER_API_MODEL", "whisper-1")
