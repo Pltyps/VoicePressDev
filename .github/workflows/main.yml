@@ -11,6 +11,11 @@ permissions:
 
 jobs:
   deploy:
+    # THE MISSING PIECE: Define the deployment environment
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
@@ -18,7 +23,6 @@ jobs:
 
       - name: Inject Backend URL
         env:
-          # Pulls the secret you will set in the next step
           ACTUAL_URL: ${{ secrets.RENDER_BACKEND_URL }}
         run: |
           # Replaces the placeholder with your actual Render URL
