@@ -1,234 +1,471 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <title>VoicePress – AI Summary, Transcript & Social Content from Videos</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  
-  <!-- Toastify CSS -->
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css" />
+  <head>
+    <meta charset="UTF-8" />
+    <title>
+      VoicePress – AI Summary, Transcript & Social Content from Videos
+    </title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-  <style>
-    :root{
-      --accent:#2563eb; /* blue-600 */
-      --muted:#64748b;
-      --bg:#f8fafc;
-      --card:#ffffff;
-      --radius:12px;
-    }
-    *{box-sizing:border-box}
-    body{font-family:Inter,Segoe UI,system-ui,Arial,sans-serif;margin:0;background:var(--bg);color:#0f172a}
-    .container{max-width:960px;margin:28px auto;padding:20px}
-    header{display:flex;align-items:center;justify-content:space-between;gap:16px}
-    .brand{display:flex;align-items:center;gap:12px}
-    .logo{width:48px;height:48px;border-radius:10px;background:linear-gradient(135deg,var(--accent),#7c3aed);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700}
-    h1{font-size:1.25rem;margin:0}
-    p.lead{margin:6px 0 0;color:var(--muted)}
+    <!-- Toastify CSS -->
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css"
+    />
 
-    .grid{display:grid;grid-template-columns:1fr;gap:18px;margin-top:20px}
-    @media(min-width:880px){.grid{grid-template-columns:360px 1fr}}
+    <style>
+      :root {
+        --accent: #2563eb; /* blue-600 */
+        --muted: #64748b;
+        --bg: #f8fafc;
+        --card: #ffffff;
+        --radius: 12px;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        font-family:
+          Inter,
+          Segoe UI,
+          system-ui,
+          Arial,
+          sans-serif;
+        margin: 0;
+        background: var(--bg);
+        color: #0f172a;
+      }
+      .container {
+        max-width: 960px;
+        margin: 28px auto;
+        padding: 20px;
+      }
+      header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      .logo {
+        width: 48px;
+        height: 48px;
+        border-radius: 10px;
+        background: linear-gradient(135deg, var(--accent), #7c3aed);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #fff;
+        font-weight: 700;
+      }
+      h1 {
+        font-size: 1.25rem;
+        margin: 0;
+      }
+      p.lead {
+        margin: 6px 0 0;
+        color: var(--muted);
+      }
 
-    .card{background:var(--card);border-radius:var(--radius);padding:18px;box-shadow:0 6px 18px rgba(2,6,23,0.06)}
+      .grid {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 18px;
+        margin-top: 20px;
+      }
+      @media (min-width: 880px) {
+        .grid {
+          grid-template-columns: 360px 1fr;
+        }
+      }
 
-    /* Status */
-    .status{display:flex;align-items:center;gap:10px}
-    .status-dot{width:12px;height:12px;border-radius:999px;background:#f59e0b;box-shadow:0 0 0 4px rgba(245,158,11,0.06)}
-    .status-text{font-size:0.95rem;color:var(--muted)}
+      .card {
+        background: var(--card);
+        border-radius: var(--radius);
+        padding: 18px;
+        box-shadow: 0 6px 18px rgba(2, 6, 23, 0.06);
+      }
 
-    /* Upload area */
-    .upload-area{border:2px dashed rgba(2,6,23,0.06);padding:14px;border-radius:10px;text-align:center}
-    .upload-area input[type=file]{display:none}
-    .upload-cta{display:inline-flex;align-items:center;gap:10px;padding:10px 14px;background:linear-gradient(90deg,var(--accent),#7c3aed);color:white;border-radius:8px;border:none;cursor:pointer}
-    .meta{margin-top:8px;color:var(--muted);font-size:0.9rem}
+      /* Status */
+      .status {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .status-dot {
+        width: 12px;
+        height: 12px;
+        border-radius: 999px;
+        background: #f59e0b;
+        box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.06);
+      }
+      .status-text {
+        font-size: 0.95rem;
+        color: var(--muted);
+      }
 
-    progress{width:100%;height:12px;border-radius:8px;overflow:hidden;background:#e6eefc}
-    progress::-webkit-progress-value{background:var(--accent)}
+      /* Upload area */
+      .upload-area {
+        border: 2px dashed rgba(2, 6, 23, 0.06);
+        padding: 14px;
+        border-radius: 10px;
+        text-align: center;
+      }
+      .upload-area input[type="file"] {
+        display: none;
+      }
+      .upload-cta {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 14px;
+        background: linear-gradient(90deg, var(--accent), #7c3aed);
+        color: white;
+        border-radius: 8px;
+        border: none;
+        cursor: pointer;
+      }
+      .meta {
+        margin-top: 8px;
+        color: var(--muted);
+        font-size: 0.9rem;
+      }
 
-    /* Processing area */
-    .processing{display:flex;align-items:center;gap:12px}
-    .spinner{width:34px;height:34px;border-radius:999px;border:4px solid #e6eefc;border-top-color:var(--accent);animation:spin 1s linear infinite}
-    @keyframes spin{to{transform:rotate(360deg)}}
+      progress {
+        width: 100%;
+        height: 12px;
+        border-radius: 8px;
+        overflow: hidden;
+        background: #e6eefc;
+      }
+      progress::-webkit-progress-value {
+        background: var(--accent);
+      }
 
-    /* Output columns */
-    .outputs{display:grid;grid-template-columns:1fr;gap:12px}
-    @media(min-width:880px){.outputs{grid-template-columns:repeat(2,1fr)}}
-    .output-card{background:linear-gradient(180deg,transparent,rgba(2,6,23,0.02));padding:12px;border-radius:10px}
-    .muted{color:var(--muted);font-size:0.95rem}
+      /* Processing area */
+      .processing {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      .spinner {
+        width: 34px;
+        height: 34px;
+        border-radius: 999px;
+        border: 4px solid #e6eefc;
+        border-top-color: var(--accent);
+        animation: spin 1s linear infinite;
+      }
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
 
-    .copy{background:transparent;border:1px solid rgba(2,6,23,0.06);padding:6px 8px;border-radius:8px;cursor:pointer}
+      /* Output columns */
+      .outputs {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 12px;
+      }
+      @media (min-width: 880px) {
+        .outputs {
+          grid-template-columns: repeat(2, 1fr);
+        }
+      }
+      .output-card {
+        background: linear-gradient(180deg, transparent, rgba(2, 6, 23, 0.02));
+        padding: 12px;
+        border-radius: 10px;
+      }
+      .muted {
+        color: var(--muted);
+        font-size: 0.95rem;
+      }
 
-    footer{margin-top:26px;text-align:center;color:var(--muted);font-size:0.9rem}
-  </style>
+      .copy {
+        background: transparent;
+        border: 1px solid rgba(2, 6, 23, 0.06);
+        padding: 6px 8px;
+        border-radius: 8px;
+        cursor: pointer;
+      }
+
+      footer {
+        margin-top: 26px;
+        text-align: center;
+        color: var(--muted);
+        font-size: 0.9rem;
+      }
+    </style>
   </head>
   <body>
-  <div class="container">
-    <header>
-      <div class="brand">
-        <div class="logo">VP</div>
+    <div class="container">
+      <header>
+        <div class="brand">
+          <div class="logo">VP</div>
+          <div>
+            <h1>VoicePress</h1>
+            <p class="lead">
+              Upload interviews — get summary, transcript, quotes, and social
+              posts.
+            </p>
+          </div>
+        </div>
+        <div class="status card" id="statusCard">
+          <div class="status-dot" id="statusDot"></div>
+          <div class="status-text" id="statusText">Checking backend…</div>
+        </div>
+      </header>
+
+      <div class="grid">
         <div>
-          <h1>VoicePress</h1>
-          <p class="lead">Upload interviews — get summary, transcript, quotes, and social posts.</p>
-        </div>
-      </div>
-      <div class="status card" id="statusCard">
-        <div class="status-dot" id="statusDot"></div>
-        <div class="status-text" id="statusText">Checking backend…</div>
-      </div>
-    </header>
+          <div class="card">
+            <label class="upload-area" for="videoFile">
+              <strong id="uploadLabel"
+                >Drag & drop or click to select an MP4</strong
+              >
+              <div class="meta">
+                Accepted: .mp4 · Max size: 100 MB (client-enforced)
+              </div>
+              <input
+                id="videoFile"
+                name="file"
+                type="file"
+                accept="video/mp4"
+              />
+            </label>
 
-    <div class="grid">
-      <div>
-        <div class="card">
-          <label class="upload-area" for="videoFile">
-            <strong id="uploadLabel">Drag & drop or click to select an MP4</strong>
-            <div class="meta">Accepted: .mp4 · Max size: 100 MB (client-enforced)</div>
-            <input id="videoFile" name="file" type="file" accept="video/mp4" />
-          </label>
+            <div style="margin-top: 12px; display: flex; gap: 10px">
+              <button id="uploadBtn" class="upload-cta" disabled>
+                Upload & Process
+              </button>
+              <button id="clearBtn" class="copy" type="button">Clear</button>
+            </div>
 
-          <div style="margin-top:12px;display:flex;gap:10px;">
-            <button id="uploadBtn" class="upload-cta" disabled>Upload & Process</button>
-            <button id="clearBtn" class="copy" type="button">Clear</button>
+            <div style="margin-top: 12px; display: none" id="progressWrap">
+              <div class="muted">Uploading / Processing</div>
+              <progress id="uploadProgress" value="0" max="100"></progress>
+              <div
+                style="
+                  margin-top: 8px;
+                  display: flex;
+                  align-items: center;
+                  justify-content: space-between;
+                "
+              >
+                <div class="muted" id="progressText">0%</div>
+                <div id="actionHint" class="muted">
+                  You can leave this page; processing continues.
+                </div>
+              </div>
+            </div>
           </div>
 
-          <div style="margin-top:12px;display:none;" id="progressWrap">
-            <div class="muted">Uploading / Processing</div>
-            <progress id="uploadProgress" value="0" max="100"></progress>
-            <div style="margin-top:8px;display:flex;align-items:center;justify-content:space-between;">
-              <div class="muted" id="progressText">0%</div>
-              <div id="actionHint" class="muted">You can leave this page; processing continues.</div>
-            </div>
+          <div class="card" style="margin-top: 14px">
+            <div class="muted"><strong>Quick Tips</strong></div>
+            <ul style="margin: 8px 0 0 18px; color: var(--muted)">
+              <li>Use MP4 files exported from common recorders</li>
+              <li>Keep interviews under 1 GB for reliable uploads</li>
+              <li>
+                Secrets (OpenAI API key) must be set in environment variables
+              </li>
+            </ul>
           </div>
         </div>
 
-        <div class="card" style="margin-top:14px">
-          <div class="muted"><strong>Quick Tips</strong></div>
-          <ul style="margin:8px 0 0 18px;color:var(--muted)">
-            <li>Use MP4 files exported from common recorders</li>
-            <li>Keep interviews under 1 GB for reliable uploads</li>
-            <li>Secrets (OpenAI API key) must be set in environment variables</li>
-          </ul>
+        <div>
+          <div class="card">
+            <div
+              style="
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+              "
+            >
+              <div>
+                <strong>Results</strong>
+                <div class="muted" style="font-size: 0.85rem">
+                  Summary, quotes & posts appear here
+                </div>
+              </div>
+              <div id="processingState" class="muted">Idle</div>
+            </div>
+
+            <div class="outputs" id="outputs" style="margin-top: 12px">
+              <div class="output-card" id="summaryCard">
+                <div
+                  style="
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                  "
+                >
+                  <strong>Summary</strong>
+                  <button class="copy" data-copy-target="summary">Copy</button>
+                </div>
+                <div id="summary" class="muted">No results yet</div>
+              </div>
+
+              <div class="output-card" id="quotesCard">
+                <div
+                  style="
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                  "
+                >
+                  <strong>Quotes</strong>
+                  <button class="copy" data-copy-target="quotes">Copy</button>
+                </div>
+                <div id="quotes" class="muted">No quotes found</div>
+              </div>
+
+              <div class="output-card" id="socialCard">
+                <div
+                  style="
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                  "
+                >
+                  <strong>Social Posts</strong>
+                  <button class="copy" data-copy-target="social">Copy</button>
+                </div>
+                <div id="social" class="muted">No social posts</div>
+              </div>
+
+              <div class="output-card" id="transcriptCard">
+                <div
+                  style="
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                  "
+                >
+                  <strong>Transcript</strong>
+                  <button class="copy" data-copy-target="transcript">
+                    Copy
+                  </button>
+                </div>
+                <pre
+                  id="transcript"
+                  style="
+                    white-space: pre-wrap;
+                    max-height: 240px;
+                    overflow: auto;
+                    margin: 8px 0 0;
+                  "
+                >
+Not available</pre
+                >
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
-      <div>
-        <div class="card">
-          <div style="display:flex;justify-content:space-between;align-items:center">
-            <div><strong>Results</strong><div class="muted" style="font-size:0.85rem">Summary, quotes & posts appear here</div></div>
-            <div id="processingState" class="muted">Idle</div>
-          </div>
-
-          <div class="outputs" id="outputs" style="margin-top:12px">
-            <div class="output-card" id="summaryCard">
-              <div style="display:flex;justify-content:space-between;align-items:center">
-                <strong>Summary</strong>
-                <button class="copy" data-copy-target="summary">Copy</button>
-              </div>
-              <div id="summary" class="muted">No results yet</div>
-            </div>
-
-            <div class="output-card" id="quotesCard">
-              <div style="display:flex;justify-content:space-between;align-items:center">
-                <strong>Quotes</strong>
-                <button class="copy" data-copy-target="quotes">Copy</button>
-              </div>
-              <div id="quotes" class="muted">No quotes found</div>
-            </div>
-
-            <div class="output-card" id="socialCard">
-              <div style="display:flex;justify-content:space-between;align-items:center">
-                <strong>Social Posts</strong>
-                <button class="copy" data-copy-target="social">Copy</button>
-              </div>
-              <div id="social" class="muted">No social posts</div>
-            </div>
-
-            <div class="output-card" id="transcriptCard">
-              <div style="display:flex;justify-content:space-between;align-items:center">
-                <strong>Transcript</strong>
-                <button class="copy" data-copy-target="transcript">Copy</button>
-              </div>
-              <pre id="transcript" style="white-space:pre-wrap;max-height:240px;overflow:auto;margin:8px 0 0">Not available</pre>
-            </div>
-          </div>
+      <footer>
+        <div>
+          Powered by OpenAI · Backend health:
+          <span id="footerStatus">unknown</span>
         </div>
-      </div>
+      </footer>
     </div>
 
-    <footer>
-      <div>Powered by OpenAI · Backend health: <span id="footerStatus">unknown</span></div>
-    </footer>
-  </div>
+    <script>
+      // Point directly to the live backend URL
+      const API_URL = "https://voicepress-live-api.onrender.com";
 
-  <script>
-    // Minimal health check to update status badge; upload logic lives in upload.js
-    async function checkHealth(){
-      try{
-        const r = await fetch('/health',{cache:'no-store'});
-        if(r.ok){
-          document.getElementById('statusDot').style.background='#10b981';
-          document.getElementById('statusText').textContent='Backend ready';
-          document.getElementById('footerStatus').textContent='ok';
-        } else {
-          document.getElementById('statusDot').style.background='#f59e0b';
-          document.getElementById('statusText').textContent='Degraded';
-          document.getElementById('footerStatus').textContent='degraded';
+      async function checkHealth() {
+        try {
+          const r = await fetch(`${API_URL}/health`, { cache: "no-store" });
+          if (r.ok) {
+            document.getElementById("statusDot").style.background = "#10b981";
+            document.getElementById("statusText").textContent = "Backend ready";
+            document.getElementById("footerStatus").textContent = "ok";
+          } else {
+            document.getElementById("statusDot").style.background = "#f59e0b";
+            document.getElementById("statusText").textContent = "Degraded";
+            document.getElementById("footerStatus").textContent = "degraded";
+          }
+        } catch (e) {
+          document.getElementById("statusDot").style.background = "#ef4444";
+          document.getElementById("statusText").textContent = "Offline";
+          document.getElementById("footerStatus").textContent = "offline";
         }
-      }catch(e){
-        document.getElementById('statusDot').style.background='#ef4444';
-        document.getElementById('statusText').textContent='Offline';
-        document.getElementById('footerStatus').textContent='offline';
       }
-    }
-    checkHealth();
-    setInterval(checkHealth,30000);
+      checkHealth();
+      setInterval(checkHealth, 30000);
 
-    // Wire simple UI interactions without overriding upload.js behavior
-    const fileInput = document.getElementById('videoFile');
-    const uploadBtn = document.getElementById('uploadBtn');
-    const clearBtn = document.getElementById('clearBtn');
-    const fileLabel = document.getElementById('uploadLabel');
-    const progressWrap = document.getElementById('progressWrap');
-    const progress = document.getElementById('uploadProgress');
-    const progressText = document.getElementById('progressText');
-    const processingState = document.getElementById('processingState');
+      // Wire simple UI interactions without overriding upload.js behavior
+      const fileInput = document.getElementById("videoFile");
+      const uploadBtn = document.getElementById("uploadBtn");
+      const clearBtn = document.getElementById("clearBtn");
+      const fileLabel = document.getElementById("uploadLabel");
+      const progressWrap = document.getElementById("progressWrap");
+      const progress = document.getElementById("uploadProgress");
+      const progressText = document.getElementById("progressText");
+      const processingState = document.getElementById("processingState");
 
-    fileInput.addEventListener('change',()=>{
-      const f = fileInput.files[0];
-      if(f){ uploadBtn.disabled=false; fileLabel.textContent = f.name; }
-      else { uploadBtn.disabled=true; fileLabel.textContent = 'Drag & drop or click to select an MP4'; }
-    });
+      fileInput.addEventListener("change", () => {
+        const f = fileInput.files[0];
+        if (f) {
+          uploadBtn.disabled = false;
+          fileLabel.textContent = f.name;
+        } else {
+          uploadBtn.disabled = true;
+          fileLabel.textContent = "Drag & drop or click to select an MP4";
+        }
+      });
 
-    clearBtn.addEventListener('click',()=>{fileInput.value='';uploadBtn.disabled=true;fileLabel.textContent='Drag & drop or click to select an MP4';});
+      clearBtn.addEventListener("click", () => {
+        fileInput.value = "";
+        uploadBtn.disabled = true;
+        fileLabel.textContent = "Drag & drop or click to select an MP4";
+      });
 
-    // Hook into upload.js if it exposes events; else provide a simple progress UI placeholder
-    window.voicepress = window.voicepress || {};
-    // upload.js can call these helpers if available
-    window.voicepress.showProgress = (pct)=>{progressWrap.style.display='block';progress.value=pct;progressText.textContent=Math.round(pct)+'%';processingState.textContent='Processing';};
-    window.voicepress.hideProgress = ()=>{processingState.textContent='Idle';progressWrap.style.display='none';progress.value=0;progressText.textContent='0%';};
-    window.voicepress.showResults = (data)=>{
-      document.getElementById('summary').textContent = data.summary || '';
-      document.getElementById('quotes').textContent = (data.quotes||[]).join('\n\n') || 'No quotes found';
-      const social = (data.social_posts||{});
-      document.getElementById('social').textContent = 'LinkedIn:\n'+(social.linkedin||[]).join('\n\n')+'\n\nInstagram:\n'+(social.instagram||[]).join('\n\n');
-      document.getElementById('transcript').textContent = data.transcript || '';
-      processingState.textContent='Done';
-    };
+      window.voicepress = window.voicepress || {};
+      window.voicepress.showProgress = (pct) => {
+        progressWrap.style.display = "block";
+        progress.value = pct;
+        progressText.textContent = Math.round(pct) + "%";
+        processingState.textContent = "Processing";
+      };
+      window.voicepress.hideProgress = () => {
+        processingState.textContent = "Idle";
+        progressWrap.style.display = "none";
+        progress.value = 0;
+        progressText.textContent = "0%";
+      };
+      window.voicepress.showResults = (data) => {
+        document.getElementById("summary").textContent = data.summary || "";
+        document.getElementById("quotes").textContent =
+          (data.quotes || []).join("\n\n") || "No quotes found";
+        const social = data.social_posts || {};
+        document.getElementById("social").textContent =
+          "LinkedIn:\n" +
+          (social.linkedin || []).join("\n\n") +
+          "\n\nInstagram:\n" +
+          (social.instagram || []).join("\n\n");
+        document.getElementById("transcript").textContent =
+          data.transcript || "";
+        processingState.textContent = "Done";
+      };
 
-    // wire the upload button to dispatch a custom event that upload.js can listen for
-    uploadBtn.addEventListener('click',()=>{
-      const evt = new CustomEvent('voicepress.upload', {detail:{file: fileInput.files[0]}});
-      window.dispatchEvent(evt);
-    });
-  </script>
+      uploadBtn.addEventListener("click", () => {
+        const evt = new CustomEvent("voicepress.upload", {
+          detail: { file: fileInput.files[0] },
+        });
+        window.dispatchEvent(evt);
+      });
+    </script>
 
-  <!-- Toastify JS -->
-  <script src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
-  <script src="upload.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
+    <script src="upload.js"></script>
   </body>
-</html>
-
-  <!-- Toastify JS -->
-  <script src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
-  <script src="upload.js"></script>
-</body>
 </html>
