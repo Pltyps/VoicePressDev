@@ -1,50 +1,5 @@
-name: Deploy VoicePress Frontend
-
-on:
-  push:
-    branches: ["main"]
-
-permissions:
-  contents: read
-  pages: write
-  id-token: write
-
-# Fixes the Node.js warning for all steps
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-
-jobs:
-  deploy:
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Inject Backend URL
-        env:
-          ACTUAL_URL: ${{ secrets.RENDER_BACKEND_URL }}
+- name: Generate Environment Config
         run: |
-          echo "Injecting Backend URL: ${{ env.ACTUAL_URL }}"
-          
-          # This regex catches placeholders even if underscores are slightly off
-          sed -i "s|__*BACKEND_URL__*|${{ env.ACTUAL_URL }}|g" index.html
-          sed -i "s|__*BACKEND_URL__*|${{ env.ACTUAL_URL }}|g" upload.js
-          
-          # VERIFICATION: This prints the result to the log so you can see if it worked
-          echo "Verification (index.html):"
-          grep "API_URL" index.html
-
-      - name: Setup Pages
-        uses: actions/configure-pages@v4
-
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: '.'
-
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+          # Creates a brand new file called env.js with your secret URL
+          echo "window.VOICEPRESS_CONFIG = { API_URL: '${{ secrets.RENDER_BACKEND_URL }}' };" > env.js
+          echo "Config file created successfully."
