@@ -1,4 +1,5 @@
-const BACKEND_URL = "__BACKEND_URL__";
+const BACKEND_URL =
+  window.VOICEPRESS_CONFIG?.API_URL || "http://localhost:10000";
 const MAX_UPLOAD_BYTES = 3 * 1024 * 1024 * 1024; // 3 GB
 
 document.addEventListener("DOMContentLoaded", () => {
