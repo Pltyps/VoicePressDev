@@ -9,12 +9,16 @@ permissions:
   pages: write
   id-token: write
 
+# Fixes the Node.js warning for all steps
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   deploy:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
-    runs-on: ubuntu-latest # FIXED: Correct indentation
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -23,13 +27,14 @@ jobs:
         env:
           ACTUAL_URL: ${{ secrets.RENDER_BACKEND_URL }}
         run: |
-          # Use a fuzzy regex to catch placeholders even with quote mismatches
-          echo "Injecting Backend URL..."
-          sed -i "s|__BACKEND_URL__|${{ env.ACTUAL_URL }}|g" index.html
-          sed -i "s|__BACKEND_URL__|${{ env.ACTUAL_URL }}|g" upload.js
+          echo "Injecting Backend URL: ${{ env.ACTUAL_URL }}"
           
-          # DEBUG: Verify the replacement happened in the logs
-          echo "Verifying index.html change:"
+          # This regex catches placeholders even if underscores are slightly off
+          sed -i "s|__*BACKEND_URL__*|${{ env.ACTUAL_URL }}|g" index.html
+          sed -i "s|__*BACKEND_URL__*|${{ env.ACTUAL_URL }}|g" upload.js
+          
+          # VERIFICATION: This prints the result to the log so you can see if it worked
+          echo "Verification (index.html):"
           grep "API_URL" index.html
 
       - name: Setup Pages
