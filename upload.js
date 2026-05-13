@@ -160,11 +160,14 @@ document.addEventListener("DOMContentLoaded", () => {
   async function processAndUpload(file) {
     try {
       setStage("Loading processing engine...", { progress: "indeterminate" });
+
       if (!ffmpeg.loaded) {
-        // FORCE SINGLE-THREADED MODE FOR GITHUB PAGES COMPATIBILITY
+        // Switch to the 'core-st' (Single Threaded) version
         await ffmpeg.load({
           coreURL:
-            "https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.js",
+            "https://unpkg.com/@ffmpeg/core-st@0.12.6/dist/umd/ffmpeg-core.js",
+          wasmURL:
+            "https://unpkg.com/@ffmpeg/core-st@0.12.6/dist/umd/ffmpeg-core.wasm",
         });
       }
 
