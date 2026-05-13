@@ -26,13 +26,11 @@ from dotenv import load_dotenv
 from fastapi.middleware.cors import CORSMiddleware
 from enum import Enum
 
-api_key = os.getenv("OPENAI_API_KEY")
-if not api_key:
-    logger.error("❌ OPENAI_API_KEY is missing! The server will not function.")
-    # Optional: sys.exit(1) if you want the build to fail immediately on Render
-client = OpenAI(api_key=api_key)
+# 1. ADD THE MISSING IMPORT HERE
+from openai import OpenAI
 
 # ---------- Logging ----------
+# 2. DEFINE THE LOGGER FIRST
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("voicepress-api")
 
@@ -56,13 +54,11 @@ def log_tmp_disk(tag: str = "boot"):
         logger.info("💽 /tmp capacity check failed")
 
 # ---------- Env / OpenAI ----------
+# 3. USE THIS SAFE INITIALIZATION BLOCK (The duplicate broken one is removed)
 try:
     load_dotenv()
 
     api_key = os.getenv("OPENAI_API_KEY")
-    # Initialize the OpenAI client only if an API key is provided. During
-    # automated tests or in developer environments the key may be absent; in
-    # that case we keep `client = None` and allow tests to monkeypatch it.
     if api_key:
         client = OpenAI(api_key=api_key)
         logger.info("🔑 OPENAI_API_KEY loaded and OpenAI client initialized")
@@ -70,9 +66,6 @@ try:
         logger.warning("⚠️ OPENAI_API_KEY not set — OpenAI client not initialized (tests/dev mode)")
 except Exception:
     logger.exception("💥 Failed to load .env or initialize OpenAI client")
-    # Do not exit the process here; allow the module to be importable in test
-    # environments where an API key may not be present. Functions should handle
-    # `client is None` appropriately or tests should monkeypatch `client`.
 
 logger.info("👋 GPT API server starting...")
 log_tmp_disk("startup")
